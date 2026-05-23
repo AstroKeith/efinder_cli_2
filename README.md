@@ -38,5 +38,5 @@ A forum for builders and users can be found at https://groups.io/g/eFinder
 
 ## Acknowledgements and Licences
 
-The eFinder Cli uses Tetra3.
+The eFinder Cli_2 uses olive-solve.
 
