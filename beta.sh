@@ -33,7 +33,7 @@ echo " "
 echo "*****************************************************************************"
 echo "Downloading eFinder_cli from AstroKeith GitHub"
 echo "*****************************************************************************"
-sudo -u efinder git clone https://github.com/AstroKeith/eFinder_cli.git
+sudo -u efinder git clone https://github.com/AstroKeith/eFinder_cli_2.git
 echo " "
 
 cd $HOME
@@ -47,7 +47,7 @@ mkdir /home/efinder/Solver/images
 mkdir /home/efinder/uploads
 sudo chmod a+rwx /home/efinder/uploads
 
-cp /home/efinder/eFinder_cli/Solver/*.* /home/efinder/Solver
+cp /home/efinder/eFinder_cli_2/Solver/*.* /home/efinder/Solver
 echo "tmpfs /home/efinder/Solver/images tmpfs nodev,nosuid,size=10M 0 0" | sudo tee -a /etc/fstab > /dev/null
 
 cd $HOME
@@ -72,7 +72,7 @@ sudo systemctl restart smbd
 cd $HOME
 echo " "
 echo "*****************************************************************************"
-echo "installing Tetra3 and its database"
+echo "installing Tolive-solve"
 echo "*****************************************************************************"
 venv-efinder/bin/python venv-efinder/bin/pip install Solver/tetra3-0.1.0-cp311-cp311-manylinux_2_35_aarch64.whl
 
@@ -84,19 +84,19 @@ sudo apt-get install -y apache2
 sudo apt-get install -y php8.2
 sudo chmod a+rwx /home/efinder
 sudo chmod a+rwx /home/efinder/Solver/images
-sudo cp eFinder_cli/Solver/index.php /var/www/html
-sudo cp /home/efinder/eFinder_cli/Solver/upload.php /var/www/html
-sudo cp /home/efinder/eFinder_cli/Solver/log.php /var/www/html
-sudo cp /home/efinder/eFinder_cli/Solver/updater.html /var/www/html
-sudo cp /home/efinder/eFinder_cli/Solver/user.ini /etc/php/8.2/apache2/conf.d
-sudo cp /home/efinder/eFinder_cli/Solver/user.ini /etc/php/8.2/cli/conf.d
+sudo cp /home/efinder/eFinder_cli_2/Solver/index.php /var/www/html
+sudo cp /home/efinder/eFinder_cli_2/Solver/upload.php /var/www/html
+sudo cp /home/efinder/eFinder_cli_2/Solver/log.php /var/www/html
+sudo cp /home/efinder/eFinder_cli_2/Solver/updater.html /var/www/html
+sudo cp /home/efinder/eFinder_cli_2/Solver/user.ini /etc/php/8.2/apache2/conf.d
+sudo cp /home/efinder/eFinder_cli_2/Solver/user.ini /etc/php/8.2/cli/conf.d
 sudo mv /var/www/html/index.html /var/www/html/apacheindex.html
-sudo chmod -R 755 /var/www/html
+sudo chmod -R a+rwx /var/www/html
 
 cd $HOME
 echo " "
 echo "*****************************************************************************"
-echo "Final eFinder_cli configuration setting"
+echo "Final eFinder_cli_2 configuration setting"
 echo "*****************************************************************************"
 
 sudo tee -a /boot/firmware/config.txt > /dev/null <<EOT
@@ -106,8 +106,8 @@ EOT
 
 sudo python /home/efinder/Solver/cmdlineUpdater.py
 
-sudo chmod a+rwx eFinder_cli/Solver/my_cron
-sudo cp /home/efinder/eFinder_cli/Solver/my_cron /etc/cron.d
+sudo chmod a+rwx eFinder_cli_2/Solver/my_cron
+sudo cp /home/efinder/eFinder_cli_2/Solver/my_cron /etc/cron.d
 
 echo 'vm.swappiness = 0' | sudo tee -a /etc/sysctl.conf > /dev/null
 sudo raspi-config nonint do_boot_behaviour B2
@@ -119,11 +119,6 @@ sudo python /home/efinder/Solver/configUpdater.py
 sudo cp newconfig.txt /boot/firmware/config.txt
 
 cd $HOME
-echo " "
-echo "*****************************************************************************"
-echo "Setting up wifi"
-echo "*****************************************************************************"
-sudo python /home/efinder/Solver/setssid.py
 
 sudo reboot now
 
