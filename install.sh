@@ -1,6 +1,6 @@
 #!/bin/sh
 
-echo "eFinder cli install"
+echo "eFinder cli_2 install"
 echo " "
 echo "*****************************************************************************"
 echo "Updating Pi OS & packages"
