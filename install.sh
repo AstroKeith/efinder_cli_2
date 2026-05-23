@@ -6,7 +6,7 @@ echo "**************************************************************************
 echo "Updating Pi OS & packages"
 echo "*****************************************************************************"
 sudo apt update
-sudo apt upgrade -y
+#sudo apt upgrade -y
 echo " "
 echo "*****************************************************************************"
 echo "Installing additional Debian and Python packages"
