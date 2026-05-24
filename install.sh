@@ -72,7 +72,7 @@ sudo systemctl restart smbd
 cd $HOME
 echo " "
 echo "*****************************************************************************"
-echo "installing Tolive-solve"
+echo "installing olive-solve"
 echo "*****************************************************************************"
 venv-efinder/bin/python venv-efinder/bin/pip install Solver/tetra3-0.1.0-cp311-cp311-manylinux_2_35_aarch64.whl
 
