@@ -190,14 +190,15 @@ def measure_offset():
     param["d_y"] = "{: .2f}".format(float(60 * d_y))
     save_param()
     offset_str = ('%1.3f,%1.3f' % (d_x,d_y))
-    hipId = str(solution['matched_catID'][0])
+    hipId = str(solution['matched_catID'][0]).strip('[]')
     name = secondname = ""
     with open(home_path+'/Solver/starnames.csv') as csvfile:
             reader = csv.reader(csvfile, delimiter=',')
             for row in reader:
                 nam = row[0].strip()
                 hip = row[1]
-                if str(row[1]) == str(solution['matched_catID'][0]):
+                print(str(row[1]),hipId)
+                if str(row[1]) == hipId:
                     hipId = hip
                     name = nam
                     if len(row[2].strip())==0:
