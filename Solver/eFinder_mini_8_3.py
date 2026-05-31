@@ -187,13 +187,15 @@ def serveWifi(): # serve WiFi port
             except Exception as error:
                 print (error)
                 print ('re-starting Device wifi server')
-                with open("/var/www/html/eFinderLiveLog.txt", "a") as h:
+                with open("fred.txt", "a") as h:
                     h.write(str(error)+'\n')
                 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 s.bind((host,port))
                 s.listen(backlog)
     except Exception as error:
+        print('outer error,',error)
+        pass
         with open("/var/www/html/eFinderLiveLog.txt", "a") as h:
             h.write(str(error)+'\n')
 
@@ -362,7 +364,7 @@ def reset_offset():
     return('1') 
 
 def save_param():
-    with open("/var/www/html/Solver/eFinder.config", "w") as h:
+    with open("/home/efinder/Solver/eFinder.config", "w") as h:
         for key, value in param.items():
             h.write("%s:%s\n" % (key, value))
 
