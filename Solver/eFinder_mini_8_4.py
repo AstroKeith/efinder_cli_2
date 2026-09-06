@@ -28,7 +28,7 @@ led.hardware_PWM(18,4,500000)
 switch = pigpio.pi()
 switch.set_mode(17, pigpio.INPUT)
 switch.set_pull_up_down(17, pigpio.PUD_UP)
-os.system("sudo chmod a+rwx -R /var/www/html/")
+
 global radec
 
 if len(sys.argv) > 1:
@@ -36,23 +36,8 @@ if len(sys.argv) > 1:
     os.system('pkill -9 -f eFinder.py') # stops the autostart eFinder program running
 from pathlib import Path
 home_path = str(Path.home())
+
 version = "8.4"
-with open("/var/www/html/eFinderLiveLog.txt", "w") as h:
-    h.write('eFinder Live v' + version + ' errors on boot:\n')
-param = dict()
-try:
-    if os.path.exists("Solver/eFinder.config") == True:
-        print('file exists')
-        with open("Solver/eFinder.config") as h:
-            for line in h:
-                line = line.strip("\n").split(":")
-                print (line)
-                param[line[0]] = str(line[1])
-except Exception as error:
-    with open("/var/www/html/eFinderLiveLog.txt", "a") as h:
-        h.write(str(error)+'\n')
-
-
 radec = ('%6.4f %+6.4f' % (0,0))
 
 print ('eFinder Mini','Version '+ version)
@@ -68,21 +53,6 @@ import csv
 from io import BytesIO
 import subprocess
 
-try:
-    import board
-    import adafruit_adxl34x
-    i2c = board.I2C()
-    i2cAddr = i2c.scan()[0]
-    print ('accelerometer found on i2c address:',hex(i2cAddr))
-    angle = adafruit_adxl34x.ADXL343(i2c, i2cAddr)
-    altAngle = True
-    print('accelerometer found')
-except Exception as error:
-    print('no acceleromater fitted')
-    altAngle = False
-    with open("/var/www/html/eFinderLiveLog.txt", "a") as h:
-        h.write(str(error)+'\n')
-
 expInc = 0.1 # sets how much exposure changes when using handpad adjust (seconds)
 gainInc = 5 # ditto for gain
 offset_flag = False
@@ -91,11 +61,30 @@ solve = False
 testMode = False
 stars = peak = '0'
 capArray = np.zeros((760,960),dtype=np.uint8)
+hotspot = False
 keep = False
 solved_radec = 0,0
 fnt = ImageFont.truetype("/home/efinder/Solver/text.ttf",16)
 frame = 0
 loop = True
+
+def logWrite(err):
+    with open("/var/www/html/eFinderLiveLog.txt", "a") as h:
+        h.write(err+'\n')
+
+def configRecover():
+    global fault
+    try:
+        if os.path.exists(home_path + "/Solver/backup.config") == True:
+            os.system('sudo cp /home/efinder/Solver/backup.config /home/efinder/Solver/eFinder.config')
+            os.system("sudo chmod a+rwx /home/efinder/Solver/eFinder.config")
+            logWrite("New default eFinder.config had to be created")
+        else:
+            fault = fault + "1"
+            logWrite("backup.config needed but not found")
+    except Exception as error:
+        fault = fault + "1"
+        logWrite(str(error))
 
 def serveWifi(): # serve WiFi port
     global solved_radec, addr, param, keep, frame
@@ -188,23 +177,23 @@ def serveWifi(): # serve WiFi port
             except Exception as error:
                 print (error)
                 print ('re-starting Device wifi server')
-                with open("/var/www/html/eFinderLiveLog.txt", "a") as h:
+                with open("fred.txt", "a") as h:
                     h.write(str(error)+'\n')
                 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 s.bind((host,port))
                 s.listen(backlog)
     except Exception as error:
+        print('outer error,',error)
+        pass
         with open("/var/www/html/eFinderLiveLog.txt", "a") as h:
             h.write(str(error)+'\n')
-
 
 def selectExp(e,g):
     camera.set(e,g)
     param['Exposure'] = str(e)
     param['Gain'] = str(g)
     save_param()
-    
 
 def pixel2dxdy(pix_x, pix_y):  # converts a pixel position, into a delta angular offset from the image centre
     deg_x = (float(pix_x) - cam[0]/2) * cam[2] / 3600  # in degrees
@@ -231,7 +220,6 @@ def capture():
         offset = False
     capArray = camera.capture(test,offset,hemi)
     return capArray
-
 
 def solveImage(img):
     global offset_flag, solve, eTime, firstStar, solution, cam, stars, peak, radec, solved_radec
@@ -508,8 +496,7 @@ def flipWifi():
             os.system('sudo nmcli conn up preconfigured')
             hotspot = False
         except Exception as error:
-            with open("/var/www/html/eFinderLiveLog.txt", "a") as h:
-                h.write(str(error)+'\n')
+            logWrite(str(error))
             print (error)
     else:
         os.system('sudo nmcli con up Hotspot')
@@ -540,8 +527,7 @@ def configHotspotWifi(msg):
     try:
         os.system("sudo nmcli con delete Hotspot")
     except Exception as error:
-        with open("/var/www/html/eFinderLiveLog.txt", "a") as h:
-            h.write(str(error)+'\n')
+        logWrite(str(error))
     sid,pswd = msg.split(" ")
     os.system("sudo nmcli dev wifi hotspot ssid '"+ sid +"' password '" + pswd + "'")
     if str(platform.machine()) == 'armv6l':
@@ -554,8 +540,7 @@ def configInfraWifi(msg):
     try:
         os.system("sudo nmcli con delete preconfigured")
     except Exception as error:
-        with open("/var/www/html/eFinderLiveLog.txt", "a") as h:
-            h.write(str(error)+'\n')
+        logWrite(str(error))
     sid,pswd = msg.split(" ")
     os.system("sudo nmcli device wifi")
     os.system("sudo nmcli c add type wifi con-name 'preconfigured' ifname wlan0 ssid '" + sid + "'")
@@ -582,31 +567,80 @@ def startImage(j):
         keep = False
     return '1'
 
+def readConfig():
+    global param
+    with open(home_path + "/Solver/eFinder.config") as h:
+        for line in h:
+            line = line.strip("\n").split(":")
+            try:
+                param[line[0]] = str(line[1])
+            except:
+                pass
+        print(param,len(param))
+
 # main code starts here
+
+with open("/var/www/html/eFinderLiveLog.txt", "w") as h:
+    h.write('eFinder Live errors on boot:\n')
+
+param = dict()
+
+try:
+    if os.path.exists(home_path + "/Solver/eFinder.config") == False:
+        print('eFinder.config not found')
+        configRecover()
+
+    readConfig()
+    try:
+        if len(param) != float(param["check"]):
+            print("bad config file")
+            configRecover()
+            print("New copy made from backup")
+            readConfig()
+    except:
+        print("check parameter missing in config file")
+        configRecover()
+        print("New copy made from backup")
+        readConfig()
+         
+except Exception as error:
+    logWrite(str(error))
+    print(str(error))
+
+try:
+    import board
+    import adafruit_adxl34x
+    i2c = board.I2C()
+    i2cAddr = i2c.scan()[0]
+    print ('accelerometer found on i2c address:',hex(i2cAddr))
+    angle = adafruit_adxl34x.ADXL343(i2c, i2cAddr)
+    altAngle = True
+    print('accelerometer found')
+except Exception as error:
+    print('no acceleromater fitted')
+    altAngle = False
+    logWrite(str(error))
 
 try:
     nexus = NexusUsb.Nexus()
 except Exception as error:
-        with open("/var/www/html/eFinderLiveLog.txt", "a") as h:
-            h.write(str(error)+'\n')
+    logWrite(str(error))
 
 try:
     camera = RPICamera_Nexus_4.RPICamera()
     camera.set(float(param["Exposure"]),param["Gain"])
 except Exception as error:
-    with open("/var/www/html/eFinderLiveLog.txt", "a") as h:
-        h.write(str(error)+'\n')
+    logWrite(str(error))
         
 coordinates = Coordinates_wifi_2.Coordinates()
 
-hotspot = True
+hotspot = False
 try:
     if param['wifi'].lower() != 'hotspot':
         hotspot = False
         print('efinder.config says no Hotspot')
 except Exception as error:
-    with open("/var/www/html/eFinderLiveLog.txt", "a") as h:
-        h.write(str(error)+'\n')
+    logWrite(str(error))
 
 if hotspot == True:
     if not checkWifiConExist('Hotspot'):
