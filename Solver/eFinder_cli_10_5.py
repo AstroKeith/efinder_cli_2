@@ -30,23 +30,6 @@ if len(sys.argv) > 1:
     os.system('pkill -9 -f eFinder.py') # stops the autostart eFinder program running
 from pathlib import Path
 home_path = str(Path.home())
-
-with open("/var/www/html/eFinderLog.txt", "w") as h:
-    h.write('eFinder v' + version + ' errors on boot:\n')
-        
-param = dict()
-try:
-    if os.path.exists(home_path + "/Solver/eFinder.config") == True:
-        with open(home_path + "/Solver/eFinder.config") as h:
-            for line in h:
-                line = line.strip("\n").split(":")
-                param[line[0]] = str(line[1])
-except Exception as error:
-    fault = fault + "1"
-    with open("/var/www/html/eFinderLog.txt", "a") as h:
-        h.write(str(error)+'\n')
-        
-
 radec = ('%6.4f %+6.4f' % (0,0))
 
 print ('Nexus eFinder','Version '+ version)
@@ -60,22 +43,6 @@ import servocat_usb
 import tetra3
 import csv
 from io import BytesIO
-
-
-try:
-    import board
-    import adafruit_adxl34x
-    i2c = board.I2C()
-    i2cAddr = i2c.scan()[0]
-    print ('accelerometer found on i2c address:',hex(i2cAddr))
-    angle = adafruit_adxl34x.ADXL343(i2c, i2cAddr)
-    altAngle = True
-except Exception as error:
-    print('no acceleromater fitted')
-    #fault = fault + "2"
-    altAngle = False
-    with open("/var/www/html/eFinderLog.txt", "a") as h:
-        h.write(str(error)+'\n')
 
 expInc = 0.1 # sets how much exposure changes when using handpad adjust (seconds)
 gainInc = 5 # ditto for gain
@@ -94,6 +61,23 @@ frame = 0
 keep = False
 hemi = 'N'
 
+def logWrite(err):
+    with open("/var/www/html/eFinderLog.txt", "a") as h:
+        h.write(err+'\n')
+
+def configRecover():
+    global fault
+    try:
+        if os.path.exists(home_path + "/Solver/backup.config") == True:
+            os.system('sudo cp /home/efinder/Solver/backup.config /home/efinder/Solver/eFinder.config')
+            os.system("sudo chmod a+rwx /home/efinder/Solver/eFinder.config")
+            logWrite("New default eFinder.config had to be created")
+        else:
+            fault = fault + "1"
+            logWrite("backup.config needed but not found")
+    except Exception as error:
+        fault = fault + "1"
+        logWrite(str(error))
 
 def pixel2dxdy(pix_x, pix_y):  # converts a pixel position, into a delta angular offset from the image centre
     deg_x = (float(pix_x) - cam[0]/2) * cam[2] / 3600  # in degrees
@@ -136,7 +120,7 @@ def solveImage(img):
         return
     stars = ('%4d' % (len(centroids)))
     peak = ('%3d' % (np.max(np_image)))
-    print(centroids)
+    #print(centroids)
     solution = t3.solve_from_centroids(
                     centroids,
                     (760,960),
@@ -145,7 +129,7 @@ def solveImage(img):
                     target_pixel=target_px,
                     return_matches=True
                 )
-    print(solution)
+    #print(solution)
     elapsed_time = time.time() - start_time
     eTime = ('%2.2f' % (elapsed_time)).zfill(5)
     if solution['RA'] == None:
@@ -166,7 +150,7 @@ def solveImage(img):
     solve = True
     
 def measure_offset():
-    global offset_str, offset_flag, offset, param
+    global offset_str, offset_flag, offset, param, target_px
     offset_flag = True
     print ("started capture")
     solveImage(capture())
@@ -184,6 +168,7 @@ def measure_offset():
     scope_x = firstStar[1]
     scope_y = firstStar[0]
     offset = firstStar
+    target_px = np.array([offset], dtype=np.float64)
     d_x, d_y = pixel2dxdy(scope_x, scope_y)
     param["d_x"] = "{: .2f}".format(float(60 * d_x))
     param["d_y"] = "{: .2f}".format(float(60 * d_y))
@@ -460,9 +445,7 @@ def setWifi(msg):
             hotspot = False
             return '1'
         except:
-            with open("/var/www/html/eFinderLog.txt", "a") as h:
-                h.write(str(error)+'\n')
-            pass
+            logWrite(str(error))
     elif msg == '1':
         try:
             if checkWifi('enabled') == False:
@@ -474,9 +457,7 @@ def setWifi(msg):
             hotspot = True
             return '1'
         except:
-            with open("/var/www/html/eFinderLog.txt", "a") as h:
-                h.write(str(error)+'\n')
-            pass
+            logWrite(str(error))
     else:
         return '0'
 
@@ -531,15 +512,66 @@ def setLED(b):
         save_param()
     return str(param["LED"])
 
+def readConfig():
+    global param
+    with open(home_path + "/Solver/eFinder.config") as h:
+        for line in h:
+            line = line.strip("\n").split(":")
+            try:
+                param[line[0]] = str(line[1])
+            except:
+                pass
+        print(param,len(param))
+
 # main code starts here
+
+with open("/var/www/html/eFinderLog.txt", "w") as h:
+    h.write('eFinder v' + version + ' errors on boot:\n')
+
+        
+param = dict()
+try:
+    if os.path.exists(home_path + "/Solver/eFinder.config") == False:
+        print('eFinder.config not found')
+        configRecover()
+
+    readConfig()
+    try:
+        if len(param) != float(param["check"]):
+            print("bad config file")
+            configRecover()
+            print("New copy made from backup")
+            readConfig()
+    except:
+        print("check parameter missing in config file")
+        configRecover()
+        print("New copy made from backup")
+        readConfig()
+         
+except Exception as error:
+    fault = fault + "1"
+    logWrite(str(error))
+    print(str(error))
+
+try:
+    import board
+    import adafruit_adxl34x
+    i2c = board.I2C()
+    i2cAddr = i2c.scan()[0]
+    print ('accelerometer found on i2c address:',hex(i2cAddr))
+    angle = adafruit_adxl34x.ADXL343(i2c, i2cAddr)
+    altAngle = True
+except Exception as error:
+    print('no acceleromater fitted')
+    altAngle = False
+    logWrite("No accelerometer found")
 
 try:
     camera = RPICamera_Nexus_4.RPICamera()
     camera.set(float(param["Exposure"]),param["Gain"])
 except Exception as error:
     fault = fault + "3"
-    with open("/var/www/html/eFinderLog.txt", "a") as h:
-        h.write('camera: ' + str(error)+'\n')
+    logWrite("camera"+str(error))
       
 servocat = servocat_usb.ServoCat()
 
@@ -589,8 +621,7 @@ try:
     nexus = NexusUsb.Nexus()
 except Exception as error:
     fault = fault + "5"
-    with open("/var/www/html/eFinderLog.txt", "a") as h:
-        h.write(str(error)+'\n')
+    logWrite(str(error))
         
 if fault == "":
     # implement wifi settings as per eFinder.config
@@ -606,8 +637,7 @@ if fault == "":
     except Exception as error:
         fault = fault + "4"
         version = version + "(" + fault + ")"
-        with open("/var/www/html/eFinderLog.txt", "a") as h:
-            h.write(str(error)+'\n')
+        logWrite(str(error))
         print ('Error',error) 
 else:
     version = version + "(" + fault + ")"
@@ -625,8 +655,7 @@ while True:
             print('starting eFinder Live mode')
             led.hardware_PWM(18,200,0)
             led.stop()
-            with open("/var/www/html/eFinderLog.txt", "a") as h:
-                h.write('Starting live mode\n')
+            logWrite('Starting live mode\n')
             subprocess.Popen(["/home/efinder/venv-efinder/bin/python","/home/efinder/Solver/eFinder_mini.py"])
             sys.exit(0)
     
@@ -642,8 +671,7 @@ while True:
             except Exception as error:
                 nexus.write(':EF'+str(error)+'#')
                 fault = fault + "6"
-                with open("/var/www/html/eFinderLog.txt", "a") as h:
-                    h.write(str(error)+'\n')
+                logWrite(str(error))
                 print ('Error',error) 
     
     sct = servocat.scan()
